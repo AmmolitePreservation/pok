@@ -5,8 +5,6 @@ import datetime
 import re
 import io
 import posixpath
-import ctypes
-import ctypes.wintypes as wintypes
 
 def log(message):
   print(f"[{datetime.datetime.now().isoformat(sep=' ', timespec='seconds')}] {message}")
@@ -24,40 +22,16 @@ ensure("paramiko")
 
 import paramiko
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "mcps", "facet", "python"))
+from facetClient.secretStore import readLogin
+
 SSH_HOST = "peridot.strata.unseencolor.com"
 SSH_USER = "claude"
-CREDENTIAL_TARGET = f"claude/{SSH_HOST}"
+CREDENTIAL_TARGET = "hosts/peridot/claude"
 STAGING_PATH = ".pok-deploy"
 APP_OWNER = "eqemu"
 APP_PATH = "/opt/eqemu/pok"
 KNOWN_HOSTS = os.path.join(os.path.expanduser("~"), ".ssh", "known_hosts")
-
-class credentialRecord(ctypes.Structure):
-  _fields_ = [
-    ("Flags", wintypes.DWORD),
-    ("Type", wintypes.DWORD),
-    ("TargetName", wintypes.LPWSTR),
-    ("Comment", wintypes.LPWSTR),
-    ("LastWritten", wintypes.FILETIME),
-    ("CredentialBlobSize", wintypes.DWORD),
-    ("CredentialBlob", ctypes.POINTER(ctypes.c_byte)),
-    ("Persist", wintypes.DWORD),
-    ("AttributeCount", wintypes.DWORD),
-    ("Attributes", ctypes.c_void_p),
-    ("TargetAlias", wintypes.LPWSTR),
-    ("UserName", wintypes.LPWSTR),
-  ]
-
-def readCredential(targetName):
-  advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
-  pointer = ctypes.POINTER(credentialRecord)()
-  if not advapi32.CredReadW(targetName, 1, 0, ctypes.byref(pointer)):
-    sys.exit(f"No {targetName} in Windows Credential Manager (error {ctypes.get_last_error()}).")
-  try:
-    record = pointer.contents
-    return record.UserName, ctypes.string_at(record.CredentialBlob, record.CredentialBlobSize).decode("utf-16-le")
-  finally:
-    advapi32.CredFree(pointer)
 
 def bumpAppVersion():
   appPy = "app/app.py"
@@ -110,7 +84,7 @@ def isValidPath(path):
   filename = parts[-1]
   return filename not in {"README.md", "pok.code-workspace"}
 
-userName, privateKey = readCredential(CREDENTIAL_TARGET)
+userName, privateKey = readLogin(CREDENTIAL_TARGET)
 if userName != SSH_USER:
   sys.exit(f"{CREDENTIAL_TARGET} is for {userName}, not {SSH_USER}.")
 
